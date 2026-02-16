@@ -1,6 +1,13 @@
+import { useState } from 'react';
 import { Shield, Zap, Rocket, CheckCircle, ArrowRight, Code2, FileCheck } from 'lucide-react';
+import { PricingModal } from './components/PricingModal';
+import { DocsPanel } from './components/DocsPanel';
+import { DemoSection } from './components/DemoSection';
 
 function App() {
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-[#F9FAFB] font-sans antialiased">
       <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-lg border-b border-gray-200 z-50">
@@ -11,8 +18,8 @@ function App() {
           </div>
           <div className="flex items-center gap-8">
             <a href="#" className="text-sm font-medium text-gray-600 hover:text-[#111827] transition">Product</a>
-            <a href="#" className="text-sm font-medium text-gray-600 hover:text-[#111827] transition">Docs</a>
-            <a href="#" className="text-sm font-medium text-gray-600 hover:text-[#111827] transition">Pricing</a>
+            <button onClick={() => setIsDocsOpen(true)} className="text-sm font-medium text-gray-600 hover:text-[#111827] transition">Docs</button>
+            <button onClick={() => setIsPricingOpen(true)} className="text-sm font-medium text-gray-600 hover:text-[#111827] transition">Pricing</button>
             <button className="px-4 py-2 bg-[#111827] text-white rounded-xl text-sm font-medium hover:bg-[#1f2937] transition">
               Get Started
             </button>
@@ -141,106 +148,7 @@ function App() {
           </div>
         </section>
 
-        <section className="max-w-7xl mx-auto px-6 py-24">
-          <div className="text-center mb-16">
-            <h2 className="text-5xl font-bold text-[#111827] tracking-tight mb-4">The Sandbox</h2>
-            <p className="text-xl text-gray-600">See Invariant in action. Paste your code, watch the magic happen.</p>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-2xl">
-            <div className="grid md:grid-cols-2 divide-x divide-gray-200">
-              <div className="monaco-editor-container bg-[#1E1E1E] p-6 min-h-[500px] relative">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                  <span className="ml-4 text-xs text-gray-400 font-mono">payment-service.ts</span>
-                </div>
-                <div className="font-mono text-sm text-gray-300 leading-relaxed">
-                  <div className="flex">
-                    <span className="text-gray-600 select-none mr-4 text-right w-8">1</span>
-                    <span><span className="text-purple-400">function</span> <span className="text-blue-400">processPayment</span>(<span className="text-orange-300">amount</span>: <span className="text-green-400">number</span>) {'{'}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="text-gray-600 select-none mr-4 text-right w-8">2</span>
-                    <span className="pl-4"><span className="text-purple-400">if</span> (amount &gt; <span className="text-green-300">0</span>) {'{'}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="text-gray-600 select-none mr-4 text-right w-8">3</span>
-                    <span className="pl-8"><span className="text-purple-400">return</span> chargeCard(amount);</span>
-                  </div>
-                  <div className="flex">
-                    <span className="text-gray-600 select-none mr-4 text-right w-8">4</span>
-                    <span className="pl-4">{'}'}</span>
-                  </div>
-                  <div className="flex">
-                    <span className="text-gray-600 select-none mr-4 text-right w-8">5</span>
-                    <span className="pl-4"><span className="text-purple-400">return</span> <span className="text-green-300">true</span>;</span>
-                  </div>
-                  <div className="flex">
-                    <span className="text-gray-600 select-none mr-4 text-right w-8">6</span>
-                    <span>{'}'}</span>
-                  </div>
-                </div>
-                <div className="absolute bottom-6 left-6 right-6">
-                  <div className="flex items-center gap-2 px-4 py-3 bg-[#F97316] text-white rounded-xl text-sm font-semibold cursor-not-allowed opacity-50">
-                    <span className="text-xs">⚠️</span>
-                    <span>Logic flaw detected: Missing validation for amount=0</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-6 min-h-[500px]">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-bold text-[#111827]">Test Report</h3>
-                  <span className="px-3 py-1 bg-[#F97316] text-white rounded-lg text-xs font-semibold">3 Issues Found</span>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-white rounded-2xl p-5 border-l-4 border-red-500">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="font-semibold text-[#111827]">Critical: Zero-Amount Bypass</div>
-                      <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded font-semibold">HIGH</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3">Function returns true when amount=0, bypassing payment</p>
-                    <div className="text-xs font-mono bg-gray-100 p-2 rounded text-gray-700">
-                      processPayment(0) === true
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-5 border-l-4 border-yellow-500">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="font-semibold text-[#111827]">Warning: Negative Amount</div>
-                      <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded font-semibold">MED</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3">No validation prevents negative payment amounts</p>
-                    <div className="text-xs font-mono bg-gray-100 p-2 rounded text-gray-700">
-                      processPayment(-100) invokes chargeCard
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl p-5 border-l-4 border-yellow-500">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="font-semibold text-[#111827]">Warning: No Error Handling</div>
-                      <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded font-semibold">MED</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3">chargeCard() failures are not caught or logged</p>
-                    <div className="text-xs font-mono bg-gray-100 p-2 rounded text-gray-700">
-                      Missing try/catch block
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 p-6 bg-gray-50 flex items-center justify-center">
-              <button className="px-8 py-4 bg-[#F97316] text-white rounded-2xl text-base font-semibold hover:bg-[#ea580c] transition flex items-center gap-2 shadow-lg">
-                <Zap className="w-5 h-5" />
-                Run Invariant
-              </button>
-            </div>
-          </div>
-        </section>
+        <DemoSection />
 
         <section className="max-w-5xl mx-auto px-6 py-24 text-center">
           <h2 className="text-5xl font-bold text-[#111827] tracking-tight mb-6">
@@ -270,6 +178,9 @@ function App() {
           </div>
         </div>
       </footer>
+
+      <PricingModal isOpen={isPricingOpen} onClose={() => setIsPricingOpen(false)} />
+      <DocsPanel isOpen={isDocsOpen} onClose={() => setIsDocsOpen(false)} />
     </div>
   );
 }
