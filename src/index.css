@@ -298,6 +298,28 @@ body {
   text-align: left;
 }
 
+.lab-file-badge {
+  min-width: 24px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(88, 157, 255, 0.6);
+  background: rgba(88, 157, 255, 0.14);
+  color: #abd2ff;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.lab-file-badge.txt {
+  border-color: rgba(195, 195, 195, 0.55);
+  background: rgba(195, 195, 195, 0.15);
+  color: #d3d8de;
+}
+
 .lab-file-row:hover {
   background: rgba(255, 255, 255, 0.06);
 }
@@ -444,6 +466,52 @@ body {
   min-height: 0;
   overflow: auto;
   padding: 10px 12px;
+}
+
+.lab-output-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-warning-banner {
+  border: 1px solid rgba(255, 128, 128, 0.45);
+  background: rgba(148, 44, 44, 0.3);
+  color: #ffd2d2;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.lab-findings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lab-finding-card {
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  background: rgba(244, 63, 94, 0.12);
+  border-radius: 10px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lab-finding-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffd8e0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lab-finding-line {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #f4d6dc;
 }
 
 .lab-terminal-output,
@@ -600,6 +668,63 @@ body {
   color: #adb9c9;
 }
 
+.lab-agent-output-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lab-agent-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.lab-agent-tab {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  color: #97a3b4;
+  border-radius: 6px;
+  width: 34px;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lab-agent-tab.active {
+  border-color: rgba(73, 51, 255, 0.7);
+  background: rgba(73, 51, 255, 0.24);
+  color: #e8e5ff;
+}
+
+.lab-agent-title {
+  font-size: 11px;
+  color: #dce2ec;
+  font-weight: 600;
+}
+
+.lab-agent-lines {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 10, 14, 0.6);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.lab-agent-line {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #b2c0d3;
+}
+
 .lab-insight-card {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding: 14px 16px 16px;
@@ -660,6 +785,47 @@ body {
 
 .lab-fix-btn:hover {
   filter: brightness(1.04);
+}
+
+.lab-chatbar {
+  display: flex;
+  gap: 8px;
+}
+
+.lab-chatbar input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: #edf3ff;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 11px;
+  outline: none;
+}
+
+.lab-chatbar input::placeholder {
+  color: #8b97a9;
+}
+
+.lab-chatbar button {
+  border: 1px solid rgba(51, 13, 242, 0.6);
+  background: rgba(51, 13, 242, 0.25);
+  color: #f3f1ff;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lab-queued-note {
+  font-size: 10px;
+  color: #adb8c9;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 8px;
 }
 
 @media (max-width: 1240px) {

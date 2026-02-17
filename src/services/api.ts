@@ -73,6 +73,7 @@ export async function streamDynamicScan(
   request: {
     code: string;
     filename: string;
+    focusPrompt?: string;
   },
   options: {
     onEvent: (event: DynamicScanStreamEvent) => void;
@@ -87,6 +88,7 @@ export async function streamDynamicScan(
     body: JSON.stringify({
       code: request.code,
       filename: request.filename,
+      focus_prompt: request.focusPrompt,
     }),
     signal: options.signal,
   });

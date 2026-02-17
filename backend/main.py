@@ -24,6 +24,7 @@ class AnalyzeRequest(BaseModel):
 class DynamicScanRequest(BaseModel):
     code: str = Field(..., min_length=1)
     filename: str = Field(default="main.py", min_length=1)
+    focus_prompt: str | None = None
 
 
 class RepoFile(BaseModel):
@@ -309,6 +310,7 @@ Do not omit the python code block.
 def run_dynamic_scan_stream(request: DynamicScanRequest) -> Iterator[str]:
     run_id = f"scan_{uuid.uuid4().hex[:10]}"
     filename = request.filename.strip() or "main.py"
+    focus_prompt = (request.focus_prompt or "").strip()
     api_key = os.getenv("K2_API_KEY")
 
     agent_steps = [
@@ -331,6 +333,14 @@ def run_dynamic_scan_stream(request: DynamicScanRequest) -> Iterator[str]:
     for agent, message in agent_steps:
         yield to_ndjson({"type": "agent_status", "agent": agent, "status": "running"})
         yield to_ndjson(log_event(agent, message))
+
+    if focus_prompt:
+        yield to_ndjson(
+            log_event(
+                "Operator Focus",
+                f"Applying user focus prompt: {focus_prompt}",
+            )
+        )
 
     if not api_key:
         fallback = build_dynamic_fallback_report(
@@ -357,6 +367,7 @@ def run_dynamic_scan_stream(request: DynamicScanRequest) -> Iterator[str]:
                     f"Target file: {filename}\n\n"
                     "Analyze this exact editor code dynamically.\n"
                     "Do not generalize or use template findings.\n\n"
+                    f"Operator focus (must prioritize): {focus_prompt or 'None provided'}\n\n"
                     f"```python\n{request.code}\n```"
                 ),
             },

@@ -3,7 +3,6 @@ import {
   BarChart3,
   ChevronLeft,
   FileCode,
-  FileText,
   FolderOpen,
   History,
   Loader2,
@@ -14,13 +13,22 @@ import {
   UserRound,
   Wrench,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { streamDynamicScan, type DynamicScanStreamEvent } from "../services/api";
 
 type FileId = "vulnerable_bank.py" | "exploit.py" | "requirements.txt";
 type PanelTab = "terminal" | "output";
 type StepStatus = "pending" | "running" | "done";
 type RuntimeState = "idle" | "loading" | "ready" | "error";
+type AgentView = 0 | 1 | 2 | 3 | 4;
+type AgentOutput = { label: string; lines: string[] };
+type FindingBlock = {
+  critical: string;
+  explanation: string;
+  location: string;
+  roastSummary: string;
+  recommendation: string;
+};
 
 type Props = {
   onBack: () => void;
@@ -87,6 +95,11 @@ const AGENT_STEPS = [
   "Agent 4 - Roaster/Critic",
   "Agent 5 - Auditor",
 ] as const;
+
+const EMPTY_AGENT_OUTPUTS: AgentOutput[] = AGENT_STEPS.map((label) => ({
+  label,
+  lines: ["No output yet. Run Scan Logic."],
+}));
 
 const KNOWN_FILE_IDS: readonly FileId[] = [
   "vulnerable_bank.py",
@@ -178,6 +191,12 @@ export function LabSimulator({ onBack }: Props) {
   const [debateLines, setDebateLines] = useState<string[]>([
     "Live agent debate will appear here after scan starts.",
   ]);
+  const [agentOutputs, setAgentOutputs] = useState<AgentOutput[]>(EMPTY_AGENT_OUTPUTS);
+  const [activeAgentView, setActiveAgentView] = useState<AgentView>(0);
+  const [focusPromptInput, setFocusPromptInput] = useState("");
+  const [queuedFocusPrompt, setQueuedFocusPrompt] = useState("");
+  const [findingBlocks, setFindingBlocks] = useState<FindingBlock[]>([]);
+  const [scanWarnings, setScanWarnings] = useState<string[]>([]);
   const [stepStatuses, setStepStatuses] = useState<StepStatus[]>([
     "pending",
     "pending",
@@ -224,6 +243,26 @@ export function LabSimulator({ onBack }: Props) {
     setDebateLines((prev) => [...prev, line]);
   };
 
+  const pushAgentOutput = (agent: string, line: string) => {
+    const index = resolveAgentIndex(agent);
+    if (index === -1) {
+      return;
+    }
+
+    setAgentOutputs((prev) =>
+      prev.map((entry, idx) => {
+        if (idx !== index) {
+          return entry;
+        }
+        const nextLines =
+          entry.lines.length === 1 && entry.lines[0] === "No output yet. Run Scan Logic."
+            ? [line]
+            : [...entry.lines, line];
+        return { ...entry, lines: nextLines };
+      }),
+    );
+  };
+
   const pushTerminal = (line: string) => {
     setTerminalLines((prev) => [...prev, line]);
   };
@@ -235,7 +274,7 @@ export function LabSimulator({ onBack }: Props) {
   };
 
   const setStepStatusForAgent = (agent: string, status: StepStatus) => {
-    const index = AGENT_STEPS.findIndex((step) => agent.includes(step));
+    const index = resolveAgentIndex(agent);
     if (index === -1) {
       return;
     }
@@ -330,6 +369,18 @@ export function LabSimulator({ onBack }: Props) {
     }
   };
 
+  const handleQueueFocusPrompt = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const value = focusPromptInput.trim();
+    if (!value) {
+      return;
+    }
+    setQueuedFocusPrompt(value);
+    setFocusPromptInput("");
+    pushDebate(`[Operator] Focus queued for next scan: ${value}`);
+    pushTerminal(`Focus prompt queued: "${value}"`);
+  };
+
   const handleScanLogic = async () => {
     if (scanRunning) {
       return;
@@ -342,12 +393,24 @@ export function LabSimulator({ onBack }: Props) {
     setScanRunning(true);
     setActivePanel("output");
     setFixApplied(false);
+    setActiveAgentView(0);
     setOutputText("");
     setDebateLines([]);
+    setAgentOutputs(
+      AGENT_STEPS.map((label) => ({
+        label,
+        lines: ["Waiting for output..."],
+      })),
+    );
+    setFindingBlocks([]);
+    setScanWarnings([]);
     setStepStatuses(["pending", "pending", "pending", "pending", "pending"]);
     setHighlightedLinesByFile({});
     pushTerminal(`$ invariant scan ${activeFile}`);
     pushTerminal("Invariant AI Reasoning...");
+    if (queuedFocusPrompt) {
+      pushTerminal(`Using operator focus: ${queuedFocusPrompt}`);
+    }
 
     let combinedText = "";
 
@@ -356,6 +419,7 @@ export function LabSimulator({ onBack }: Props) {
         {
           code: files[activeFile],
           filename: activeFile,
+          focusPrompt: queuedFocusPrompt || undefined,
         },
         {
           signal: controller.signal,
@@ -367,8 +431,13 @@ export function LabSimulator({ onBack }: Props) {
                 setOutputText((prev) => prev + chunk);
               },
               onDebate: pushDebate,
+              onAgentLog: pushAgentOutput,
               onStep: setStepStatusForAgent,
-              onError: () => setApiState("down"),
+              onWarning: (message) => setScanWarnings((prev) => [...prev, message]),
+              onError: (message) => {
+                setApiState("down");
+                setScanWarnings((prev) => [...prev, message]);
+              },
               onDone: (analysisText) => {
                 if (analysisText.trim()) {
                   combinedText = analysisText;
@@ -385,6 +454,22 @@ export function LabSimulator({ onBack }: Props) {
         pushDebate("Scan completed with empty response payload.");
         pushTerminal("Scan complete: no response content.");
       } else {
+        const parsedAgentOutputs = parseAgentOutputs(finalText);
+        if (parsedAgentOutputs) {
+          setAgentOutputs((prev) =>
+            prev.map((entry, index) => ({
+              ...entry,
+              lines:
+                parsedAgentOutputs[index] && parsedAgentOutputs[index].length > 0
+                  ? parsedAgentOutputs[index]
+                  : entry.lines,
+            })),
+          );
+        }
+
+        const parsedFindings = parseFindingBlocks(finalText);
+        setFindingBlocks(parsedFindings);
+
         const highlights = extractHighlights(finalText, activeFile);
         setHighlightedLinesByFile(highlights);
 
@@ -397,6 +482,10 @@ export function LabSimulator({ onBack }: Props) {
 
         const criticalCount = countCriticalBlocks(finalText);
         pushTerminal(`Scan complete: ${criticalCount} critical block(s) reported.`);
+      }
+
+      if (queuedFocusPrompt) {
+        setQueuedFocusPrompt("");
       }
     } catch (error) {
       if (controller.signal.aborted) {
@@ -532,7 +621,7 @@ export function LabSimulator({ onBack }: Props) {
               className={`lab-file-row ${activeFile === "vulnerable_bank.py" ? "active" : ""}`}
               onClick={() => handleFileClick("vulnerable_bank.py")}
             >
-              <FileCode size={14} />
+              <span className="lab-file-badge">py</span>
               vulnerable_bank.py
             </button>
             <button
@@ -540,14 +629,14 @@ export function LabSimulator({ onBack }: Props) {
               onClick={() => handleFileClick("exploit.py")}
               title={!exploitUnlocked ? "Locked until scan completes" : "Open exploit script"}
             >
-              <FileCode size={14} />
+              <span className="lab-file-badge">py</span>
               exploit.py
             </button>
             <button
               className={`lab-file-row ${activeFile === "requirements.txt" ? "active" : ""}`}
               onClick={() => handleFileClick("requirements.txt")}
             >
-              <FileText size={14} />
+              <span className="lab-file-badge txt">txt</span>
               requirements.txt
             </button>
           </aside>
@@ -592,10 +681,34 @@ export function LabSimulator({ onBack }: Props) {
                     ))}
                   </pre>
                 ) : (
-                  <pre className="lab-invariant-output">
-                    {outputText}
-                    {scanRunning ? <span className="cursor">▋</span> : null}
-                  </pre>
+                  <div className="lab-output-stack">
+                    {scanWarnings.length > 0 ? (
+                      <div className="lab-warning-banner">
+                        {scanWarnings[scanWarnings.length - 1]}
+                      </div>
+                    ) : null}
+                    {findingBlocks.length > 0 ? (
+                      <div className="lab-findings-grid">
+                        {findingBlocks.map((finding, idx) => (
+                          <div className="lab-finding-card" key={`${idx}-${finding.critical}`}>
+                            <div className="lab-finding-title">{finding.critical}</div>
+                            <div className="lab-finding-line">{finding.explanation}</div>
+                            <div className="lab-finding-line">LOCATION: {finding.location}</div>
+                            <div className="lab-finding-line">
+                              ROAST SUMMARY: {finding.roastSummary}
+                            </div>
+                            <div className="lab-finding-line">
+                              RECOMMENDATION: {finding.recommendation}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    <pre className="lab-invariant-output">
+                      {outputText}
+                      {scanRunning ? <span className="cursor">▋</span> : null}
+                    </pre>
+                  </div>
                 )}
               </div>
             </section>
@@ -631,6 +744,28 @@ export function LabSimulator({ onBack }: Props) {
             ))}
           </div>
 
+          <div className="lab-agent-output-card">
+            <div className="lab-agent-tabs">
+              {agentOutputs.map((agent, index) => (
+                <button
+                  key={agent.label}
+                  className={`lab-agent-tab ${activeAgentView === index ? "active" : ""}`}
+                  onClick={() => setActiveAgentView(index as AgentView)}
+                >
+                  A{index + 1}
+                </button>
+              ))}
+            </div>
+            <div className="lab-agent-title">{agentOutputs[activeAgentView].label}</div>
+            <div className="lab-agent-lines">
+              {agentOutputs[activeAgentView].lines.map((line, idx) => (
+                <div key={`${activeAgentView}-${idx}-${line}`} className="lab-agent-line">
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="lab-debate-log">
             {debateLines.map((line, idx) => (
               <div key={`${idx}-${line}`} className="lab-debate-line">
@@ -656,6 +791,17 @@ export function LabSimulator({ onBack }: Props) {
             <Wrench size={14} />
             {fixApplied ? "Fix Applied" : "Apply Fix"}
           </button>
+          <form className="lab-chatbar" onSubmit={handleQueueFocusPrompt}>
+            <input
+              value={focusPromptInput}
+              onChange={(event) => setFocusPromptInput(event.target.value)}
+              placeholder="Ask agents what to focus on in the next scan..."
+            />
+            <button type="submit">Queue</button>
+          </form>
+          {queuedFocusPrompt ? (
+            <div className="lab-queued-note">Queued: {queuedFocusPrompt}</div>
+          ) : null}
         </div>
       </aside>
     </div>
@@ -671,13 +817,21 @@ function handleScanEvent(
   handlers: {
     onToken: (chunk: string) => void;
     onDebate: (line: string) => void;
+    onAgentLog: (agent: string, line: string) => void;
     onStep: (agent: string, status: StepStatus) => void;
-    onError: () => void;
+    onWarning: (message: string) => void;
+    onError: (message: string) => void;
     onDone: (analysisText: string) => void;
   },
 ) {
+  if (event.type === "run_start") {
+    handlers.onDebate(`Run ${event.run_id} started for ${event.filename}.`);
+    return;
+  }
+
   if (event.type === "log") {
     handlers.onDebate(`[${event.agent}] ${event.message}`);
+    handlers.onAgentLog(event.agent, event.message);
     handlers.onStep(event.agent, "running");
     return;
   }
@@ -693,8 +847,11 @@ function handleScanEvent(
   }
 
   if (event.type === "error") {
-    handlers.onDebate(`[Pipeline Error] ${event.message}`);
-    handlers.onError();
+    handlers.onDebate(`[Pipeline Warning] ${event.message}`);
+    handlers.onWarning(event.message);
+    if (event.message.toLowerCase().includes("k2") || event.message.toLowerCase().includes("http")) {
+      handlers.onError(event.message);
+    }
     return;
   }
 
@@ -758,6 +915,58 @@ function countCriticalBlocks(text: string): number {
   return blocks ? blocks.length : 0;
 }
 
+function parseAgentOutputs(text: string): string[][] | null {
+  const outputs: string[][] = AGENT_STEPS.map(() => []);
+  const lines = text.split("\n");
+
+  for (const line of lines) {
+    const match = line.match(/^\s*AGENT\s*([1-5])\s*:\s*(.+)\s*$/i);
+    if (!match) {
+      continue;
+    }
+    const index = Number(match[1]) - 1;
+    if (index < 0 || index > 4) {
+      continue;
+    }
+    outputs[index].push(match[2].trim());
+  }
+
+  return outputs.some((list) => list.length > 0) ? outputs : null;
+}
+
+function parseFindingBlocks(text: string): FindingBlock[] {
+  const criticals = [...text.matchAll(/CRITICAL:\s*(.+)/gi)].map((match) => match[1]?.trim() ?? "");
+  const explanations = [...text.matchAll(/EXPLANATION:\s*(.+)/gi)].map(
+    (match) => match[1]?.trim() ?? "",
+  );
+  const locations = [...text.matchAll(/LOCATION:\s*(.+)/gi)].map((match) => match[1]?.trim() ?? "");
+  const roastSummaries = [...text.matchAll(/ROAST SUMMARY:\s*(.+)/gi)].map(
+    (match) => match[1]?.trim() ?? "",
+  );
+  const recommendations = [...text.matchAll(/RECOMMENDATION:\s*(.+)/gi)].map(
+    (match) => match[1]?.trim() ?? "",
+  );
+
+  const total = Math.max(
+    criticals.length,
+    explanations.length,
+    locations.length,
+    roastSummaries.length,
+    recommendations.length,
+  );
+  const findings: FindingBlock[] = [];
+  for (let index = 0; index < total; index += 1) {
+    findings.push({
+      critical: criticals[index] ?? "Unspecified Critical",
+      explanation: explanations[index] ?? "No explanation provided.",
+      location: locations[index] ?? "unknown:1",
+      roastSummary: roastSummaries[index] ?? "No roast summary provided.",
+      recommendation: recommendations[index] ?? "No recommendation provided.",
+    });
+  }
+  return findings;
+}
+
 function extractExploitCode(text: string): string | null {
   const match = text.match(/```python\s*([\s\S]*?)```/i);
   if (!match || !match[1]) {
@@ -795,6 +1004,18 @@ function extractHighlights(
 function resolveFileId(path: string): FileId | null {
   const basename = path.split(/[\\/]/).pop()?.trim() ?? "";
   return KNOWN_FILE_IDS.includes(basename as FileId) ? (basename as FileId) : null;
+}
+
+function resolveAgentIndex(agent: string): number {
+  const normalized = agent.toLowerCase();
+  const numbered = normalized.match(/agent\s*([1-5])/);
+  if (numbered) {
+    const index = Number(numbered[1]) - 1;
+    if (index >= 0 && index < AGENT_STEPS.length) {
+      return index;
+    }
+  }
+  return AGENT_STEPS.findIndex((step) => normalized.includes(step.toLowerCase()));
 }
 
 function withTrailingNewline(value: string): string {
