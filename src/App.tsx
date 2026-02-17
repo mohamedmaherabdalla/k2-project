@@ -1,392 +1,183 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { analyzeInvariantSource } from "./services/api";
+import { Shield, ArrowRight, CheckCircle, Zap, Rocket, Code2, FileCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { LabSimulator } from "./components/LabSimulator";
 
-type FileId = "vulnerable_bank.py" | "exploit.py" | "requirements.txt";
-type PanelTab = "terminal" | "output";
-
-const KEYWORDS = new Set([
-  "and",
-  "as",
-  "async",
-  "await",
-  "class",
-  "def",
-  "elif",
-  "else",
-  "except",
-  "False",
-  "finally",
-  "for",
-  "from",
-  "if",
-  "import",
-  "in",
-  "is",
-  "None",
-  "not",
-  "or",
-  "pass",
-  "raise",
-  "return",
-  "True",
-  "try",
-  "while",
-  "with",
-]);
-
-const TOKEN_PATTERN =
-  /(#.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(?:and|as|async|await|class|def|elif|else|except|False|finally|for|from|if|import|in|is|None|not|or|pass|raise|return|True|try|while|with)\b|\b\d+(?:\.\d+)?\b|\b[a-zA-Z_]\w*(?=\()/g;
-
-const INITIAL_FILES: Record<FileId, string> = {
-  "vulnerable_bank.py": `import threading
-import time
-
-
-class BankAccount:
-    def __init__(self, opening_balance):
-        self.balance = opening_balance
-
-    def withdraw(self, amount):
-        if amount <= 0:
-            return {"ok": False, "reason": "invalid amount"}
-
-        if self.balance >= amount:
-            current = self.balance
-            time.sleep(0.08)
-            self.balance = current - amount
-            return {"ok": True, "new_balance": self.balance}
-
-        return {"ok": False, "reason": "insufficient funds"}
-
-
-account = BankAccount(1000)
-`,
-  "exploit.py": `import threading
-from vulnerable_bank import account
-
-
-def attack():
-    result = account.withdraw(700)
-    print("withdraw result:", result)
-
-
-t1 = threading.Thread(target=attack)
-t2 = threading.Thread(target=attack)
-t1.start()
-t2.start()
-t1.join()
-t2.join()
-
-print("final balance:", account.balance)
-`,
-  "requirements.txt": `flask==3.0.2
-gunicorn==22.0.0
-`,
-};
+type ViewMode = "landing" | "lab";
 
 function App() {
-  const [files, setFiles] = useState<Record<FileId, string>>(INITIAL_FILES);
-  const [activeFile, setActiveFile] = useState<FileId>("vulnerable_bank.py");
-  const [activePanel, setActivePanel] = useState<PanelTab>("terminal");
-  const [scanRunning, setScanRunning] = useState(false);
-  const [exploitUnlocked, setExploitUnlocked] = useState(false);
-  const [raceHighlightEnabled, setRaceHighlightEnabled] = useState(false);
-  const [terminalLines, setTerminalLines] = useState<string[]>([
-    "$ python vulnerable_bank.py",
-    "Running local dev simulation...",
-    "No issues detected yet.",
-  ]);
-  const [outputText, setOutputText] = useState<string>(
-    "Invariant Output is empty. Run Scan Logic to start analysis.",
-  );
-  const [apiState, setApiState] = useState<"idle" | "ok" | "down">("idle");
-
-  const codeLayerRef = useRef<HTMLPreElement | null>(null);
-  const inputLayerRef = useRef<HTMLTextAreaElement | null>(null);
-  const typingTimerRef = useRef<number | null>(null);
-
-  const redLines = useMemo(
-    () =>
-      raceHighlightEnabled && activeFile === "vulnerable_bank.py"
-        ? new Set([12, 13, 14, 15])
-        : new Set<number>(),
-    [activeFile, raceHighlightEnabled],
-  );
-
-  const highlightedCode = useMemo(
-    () => renderCode(files[activeFile], redLines),
-    [activeFile, files, redLines],
-  );
-
-  const handleFileClick = (fileId: FileId) => {
-    if (fileId === "exploit.py" && !exploitUnlocked) {
-      return;
-    }
-    setActiveFile(fileId);
-  };
-
-  const handleCodeChange = (value: string) => {
-    setFiles((prev) => ({ ...prev, [activeFile]: value }));
-  };
-
-  const syncScroll = () => {
-    if (!codeLayerRef.current || !inputLayerRef.current) {
-      return;
-    }
-    codeLayerRef.current.scrollTop = inputLayerRef.current.scrollTop;
-    codeLayerRef.current.scrollLeft = inputLayerRef.current.scrollLeft;
-  };
-
-  const stopTypewriter = () => {
-    if (typingTimerRef.current !== null) {
-      window.clearInterval(typingTimerRef.current);
-      typingTimerRef.current = null;
-    }
-  };
+  const [viewMode, setViewMode] = useState<ViewMode>("landing");
 
   useEffect(() => {
-    return () => {
-      stopTypewriter();
-    };
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("view") === "lab") {
+      setViewMode("lab");
+    }
   }, []);
 
-  const streamOutput = (message: string): Promise<void> =>
-    new Promise((resolve) => {
-      stopTypewriter();
-      setOutputText("");
-      let index = 0;
-      typingTimerRef.current = window.setInterval(() => {
-        index += 2;
-        setOutputText(message.slice(0, index));
-        if (index >= message.length) {
-          stopTypewriter();
-          resolve();
-        }
-      }, 16);
-    });
-
-  const handleScanLogic = async () => {
-    if (scanRunning) {
-      return;
-    }
-
-    setScanRunning(true);
-    setActivePanel("output");
-    setRaceHighlightEnabled(false);
-    setTerminalLines((prev) => [
-      ...prev,
-      "$ invariant scan vulnerable_bank.py",
-      "Invariant AI Reasoning...",
-    ]);
-
-    const source = files["vulnerable_bank.py"];
-    const startedAt = Date.now();
-    const apiPromise = analyzeInvariantSource(source)
-      .then((result) => {
-        setApiState("ok");
-        return result.summary;
-      })
-      .catch(() => {
-        setApiState("down");
-        return "";
-      });
-
-    const elapsed = Date.now() - startedAt;
-    const delay = Math.max(3000 - elapsed, 0);
-    await new Promise((resolve) => window.setTimeout(resolve, delay));
-
-    setRaceHighlightEnabled(true);
-    setExploitUnlocked(true);
-
-    const apiSummary = await Promise.race<string>([
-      apiPromise,
-      new Promise((resolve) => window.setTimeout(() => resolve(""), 1200)),
-    ]);
-
-    const report = [
-      "CRITICAL: Race Condition Flaw",
-      "",
-      "EXPLANATION: Two concurrent withdrawals can both pass the balance check before state is updated, enabling double-spend losses.",
-      "",
-      "LOCATION: vulnerable_bank.py:12",
-      "",
-      "ROAST SUMMARY: This survives critique because exploitability depends on precise timing between read and write steps, not a trivial syntax mistake.",
-      "",
-      "RECOMMENDATION: Protect withdraw() with a lock or atomic transaction and add concurrent test coverage for duplicate withdrawal attempts.",
-      "",
-      apiSummary
-        ? `API NOTE: ${apiSummary}`
-        : "API NOTE: Backend unavailable, rendered local simulation report.",
-    ].join("\n");
-
-    await streamOutput(report);
-    setTerminalLines((prev) => [
-      ...prev,
-      "Scan complete: race condition confirmed.",
-      "exploit.py unlocked.",
-    ]);
-    setScanRunning(false);
+  const enterLab = () => {
+    setViewMode("lab");
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "lab");
+    window.history.replaceState({}, "", url.toString());
   };
 
-  return (
-    <div className="vscode-shell">
-      <header className="workbench-topbar">
-        <div className="window-title">Invariant Security Lab</div>
-        <div className="topbar-right">
-          <span className={`api-pill api-pill-${apiState}`}>
-            API {apiState === "ok" ? "Online" : apiState === "down" ? "Offline" : "Unknown"}
-          </span>
-          <button className="scan-button" onClick={handleScanLogic} disabled={scanRunning}>
-            {scanRunning ? (
-              <>
-                <span className="spinner" />
-                Invariant AI Reasoning...
-              </>
-            ) : (
-              "Scan Logic"
-            )}
-          </button>
-        </div>
-      </header>
+  const returnToLanding = () => {
+    setViewMode("landing");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("view");
+    window.history.replaceState({}, "", url.toString());
+  };
 
-      <div className="workbench-main">
-        <aside className="explorer">
-          <div className="explorer-title">Explorer</div>
-          <div className="file-group">workspace</div>
-          <button
-            className={`file-row ${activeFile === "vulnerable_bank.py" ? "active" : ""}`}
-            onClick={() => handleFileClick("vulnerable_bank.py")}
-          >
-            <span className="file-icon py" />
-            vulnerable_bank.py
-          </button>
-          <button
-            className={`file-row ${activeFile === "exploit.py" ? "active" : ""} ${!exploitUnlocked ? "disabled" : ""}`}
-            onClick={() => handleFileClick("exploit.py")}
-            title={!exploitUnlocked ? "Locked until scan completes" : "Open exploit script"}
-          >
-            <span className="file-icon py" />
-            exploit.py
-          </button>
-          <button
-            className={`file-row ${activeFile === "requirements.txt" ? "active" : ""}`}
-            onClick={() => handleFileClick("requirements.txt")}
-          >
-            <span className="file-icon txt" />
-            requirements.txt
-          </button>
-        </aside>
-
-        <section className="editor-section">
-          <div className="editor-tabbar">
-            <div className="editor-tab active">{activeFile}</div>
-          </div>
-          <div className="editor-surface">
-            <pre
-              ref={codeLayerRef}
-              className="code-layer"
-              dangerouslySetInnerHTML={{ __html: highlightedCode }}
-            />
-            <textarea
-              ref={inputLayerRef}
-              className="input-layer"
-              value={files[activeFile]}
-              onChange={(event) => handleCodeChange(event.target.value)}
-              onScroll={syncScroll}
-              spellCheck={false}
-            />
-          </div>
-        </section>
-      </div>
-
-      <section className="bottom-panel">
-        <div className="panel-tabs">
-          <button
-            className={activePanel === "terminal" ? "panel-tab active" : "panel-tab"}
-            onClick={() => setActivePanel("terminal")}
-          >
-            Terminal
-          </button>
-          <button
-            className={activePanel === "output" ? "panel-tab active" : "panel-tab"}
-            onClick={() => setActivePanel("output")}
-          >
-            Invariant Output
-          </button>
-        </div>
-        <div className="panel-content">
-          {activePanel === "terminal" ? (
-            <pre className="terminal-output">
-              {terminalLines.map((line, idx) => (
-                <div key={`${idx}-${line}`}>{line}</div>
-              ))}
-            </pre>
-          ) : (
-            <pre className="invariant-output">
-              {outputText}
-              {scanRunning ? <span className="cursor">▋</span> : null}
-            </pre>
-          )}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function highlightLine(line: string): string {
-  TOKEN_PATTERN.lastIndex = 0;
-  let html = "";
-  let last = 0;
-  let tokenMatch: RegExpExecArray | null = TOKEN_PATTERN.exec(line);
-
-  while (tokenMatch) {
-    const token = tokenMatch[0];
-    const index = tokenMatch.index;
-    html += escapeHtml(line.slice(last, index));
-
-    if (tokenMatch[1]) {
-      html += `<span class="tok-comment">${escapeHtml(token)}</span>`;
-      last = index + token.length;
-      break;
-    } else if (tokenMatch[2]) {
-      html += `<span class="tok-string">${escapeHtml(token)}</span>`;
-    } else if (/^\d/.test(token)) {
-      html += `<span class="tok-number">${escapeHtml(token)}</span>`;
-    } else if (KEYWORDS.has(token)) {
-      html += `<span class="tok-keyword">${escapeHtml(token)}</span>`;
-    } else {
-      html += `<span class="tok-function">${escapeHtml(token)}</span>`;
-    }
-
-    last = index + token.length;
-    tokenMatch = TOKEN_PATTERN.exec(line);
+  if (viewMode === "lab") {
+    return <LabSimulator onBack={returnToLanding} />;
   }
 
-  html += escapeHtml(line.slice(last));
-  return html.length > 0 ? html : "&nbsp;";
-}
+  return (
+    <div className="min-h-screen bg-[#F9FAFB] font-sans antialiased">
+      <nav className="fixed top-0 w-full bg-white/80 backdrop-blur-lg border-b border-gray-200 z-50">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Shield className="w-6 h-6 text-[#F97316]" />
+            <span className="text-xl font-bold text-[#111827] tracking-tight">Invariant</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={enterLab}
+              className="px-5 py-2 bg-[#111827] text-white rounded-xl text-sm font-medium hover:bg-[#1f2937] transition inline-flex items-center gap-2"
+            >
+              Run Invariant <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </nav>
 
-function renderCode(code: string, redLines: Set<number>): string {
-  return code
-    .split("\n")
-    .map((line, index) => {
-      const lineNo = index + 1;
-      const isAlert = redLines.has(lineNo);
-      return `<span class="code-line ${isAlert ? "code-line-alert" : ""}">
-  <span class="line-no">${lineNo}</span>
-  <span class="line-content">${highlightLine(line)}</span>
-</span>`;
-    })
-    .join("");
+      <main className="pt-24">
+        <section className="max-w-5xl mx-auto px-6 py-24 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-gray-200 mb-8">
+            <span className="w-2 h-2 bg-[#F97316] rounded-full animate-pulse"></span>
+            <span className="text-sm font-medium text-gray-700">Now in Public Beta</span>
+          </div>
+
+          <h1 className="text-7xl font-bold text-[#111827] tracking-tight leading-[1.1] mb-6">
+            We generate the tests
+            <br />
+            you forgot to write.
+          </h1>
+
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto mb-12 leading-relaxed">
+            Enterprise-grade logic security that catches critical bugs before production. Click Run
+            Invariant to enter the live VS Code simulator experience.
+          </p>
+
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={enterLab}
+              className="px-8 py-4 bg-[#111827] text-white rounded-2xl text-base font-semibold hover:bg-[#1f2937] transition flex items-center gap-2"
+            >
+              Run Invariant <ArrowRight className="w-5 h-5" />
+            </button>
+            <a
+              href="https://github.com/mohamedmaherabdalla/k2-project"
+              target="_blank"
+              rel="noreferrer"
+              className="px-8 py-4 bg-white text-[#111827] rounded-2xl text-base font-semibold border-2 border-gray-300 hover:border-[#111827] transition"
+            >
+              View GitHub
+            </a>
+          </div>
+        </section>
+
+        <section className="max-w-7xl mx-auto px-6 py-24">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="md:col-span-2 bg-white rounded-3xl p-12 border border-gray-200 hover:border-gray-300 transition">
+              <div className="flex items-start justify-between mb-8">
+                <div>
+                  <h3 className="text-3xl font-bold text-[#111827] mb-4 tracking-tight">
+                    Business Logic vs Syntax
+                  </h3>
+                  <p className="text-gray-600 text-lg leading-relaxed">
+                    Traditional tools catch syntax errors. Invariant catches the billion-dollar
+                    logic flaws.
+                  </p>
+                </div>
+                <Code2 className="w-12 h-12 text-[#F97316]" />
+              </div>
+              <div className="space-y-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                    <span className="text-2xl">❌</span>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[#111827] mb-1">Syntax Checkers</div>
+                    <div className="text-gray-600 text-sm">
+                      Find typos, missing semicolons, type mismatches
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-green-50 flex items-center justify-center flex-shrink-0">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-[#111827] mb-1">Invariant</div>
+                    <div className="text-gray-600 text-sm">
+                      Finds payment race conditions, auth bypasses, state corruption
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-white to-gray-50 rounded-3xl p-10 border border-gray-200 hover:border-gray-300 transition">
+              <div className="w-14 h-14 rounded-2xl bg-[#F97316] flex items-center justify-center mb-6">
+                <Zap className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-[#111827] mb-3 tracking-tight">Zero Config</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Point Invariant at your repo. No annotations, no DSLs, no rewrites.
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-white to-gray-50 rounded-3xl p-10 border border-gray-200 hover:border-gray-300 transition">
+              <div className="w-14 h-14 rounded-2xl bg-[#111827] flex items-center justify-center mb-6">
+                <Rocket className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-[#111827] mb-3 tracking-tight">CI/CD Ready</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Runs in GitHub Actions, GitLab CI, Jenkins. Get security reports on every PR.
+              </p>
+            </div>
+
+            <div className="md:col-span-2 bg-gradient-to-br from-[#F97316]/5 to-white rounded-3xl p-10 border border-[#F97316]/20 hover:border-[#F97316]/40 transition">
+              <div className="w-14 h-14 rounded-2xl bg-[#F97316] flex items-center justify-center mb-6">
+                <FileCheck className="w-7 h-7 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-[#111827] mb-3 tracking-tight">
+                Production-Grade Coverage
+              </h3>
+              <p className="text-gray-600 leading-relaxed mb-6">
+                Every edge case, every race condition, every security boundary.
+              </p>
+              <div className="flex items-center gap-8 text-center">
+                <div>
+                  <div className="text-4xl font-bold text-[#111827]">10,000+</div>
+                  <div className="text-sm text-gray-600 mt-1">Tests Generated</div>
+                </div>
+                <div>
+                  <div className="text-4xl font-bold text-[#111827]">99.8%</div>
+                  <div className="text-sm text-gray-600 mt-1">Logic Coverage</div>
+                </div>
+                <div>
+                  <div className="text-4xl font-bold text-[#111827]">&lt;2min</div>
+                  <div className="text-sm text-gray-600 mt-1">Analysis Time</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
 }
 
 export default App;

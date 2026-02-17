@@ -1,41 +1,13 @@
-:root {
-  color-scheme: dark;
-  --bg-main: #1e1e1e;
-  --bg-editor: #1e1e1e;
-  --bg-sidebar: #252526;
-  --bg-tab: #2d2d2d;
-  --bg-panel: #181818;
-  --border: #2f2f2f;
-  --text-main: #d4d4d4;
-  --text-dim: #9da2aa;
-  --accent: #0e639c;
-  --danger: #8f2f35;
-  --danger-border: #b44c54;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-}
-
-body {
-  background: var(--bg-main);
-  color: var(--text-main);
-  font-family: "SF Pro Text", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 .vscode-shell {
   height: 100vh;
   display: grid;
   grid-template-rows: 44px 1fr 220px;
-  background: var(--bg-main);
+  background: #1e1e1e;
+  color: #d4d4d4;
 }
 
 .workbench-topbar {
@@ -43,7 +15,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid #2f2f2f;
   background: #2b2b2b;
 }
 
@@ -57,6 +29,16 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.back-button {
+  border: 1px solid #445465;
+  background: #2b333c;
+  color: #dce8f4;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .api-pill {
@@ -85,7 +67,7 @@ body {
 
 .scan-button {
   border: 1px solid #2574a9;
-  background: linear-gradient(180deg, #1177bb 0%, var(--accent) 100%);
+  background: linear-gradient(180deg, #1177bb 0%, #0e639c 100%);
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -124,8 +106,8 @@ body {
 }
 
 .explorer {
-  border-right: 1px solid var(--border);
-  background: var(--bg-sidebar);
+  border-right: 1px solid #2f2f2f;
+  background: #252526;
   padding: 10px 8px;
   display: flex;
   flex-direction: column;
@@ -154,7 +136,7 @@ body {
   gap: 8px;
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text-main);
+  color: #d4d4d4;
   text-align: left;
   font-size: 13px;
   padding: 6px 8px;
@@ -202,7 +184,7 @@ body {
 .editor-tabbar {
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid #2f2f2f;
   background: #252526;
 }
 
@@ -213,15 +195,15 @@ body {
 }
 
 .editor-tab.active {
-  background: var(--bg-editor);
-  border-right: 1px solid var(--border);
+  background: #1e1e1e;
+  border-right: 1px solid #2f2f2f;
 }
 
 .editor-surface {
   min-height: 0;
   min-width: 0;
   position: relative;
-  background: var(--bg-editor);
+  background: #1e1e1e;
 }
 
 .code-layer,
@@ -274,7 +256,7 @@ body {
 }
 
 .line-content {
-  color: var(--text-main);
+  color: #d4d4d4;
   flex: 1;
   min-width: 0;
   padding-right: 16px;
@@ -282,7 +264,7 @@ body {
 
 .code-line-alert {
   background: linear-gradient(90deg, rgba(164, 45, 45, 0.36) 0%, rgba(133, 39, 39, 0.1) 75%);
-  border-left: 3px solid var(--danger-border);
+  border-left: 3px solid #b44c54;
 }
 
 .tok-keyword {
@@ -306,8 +288,8 @@ body {
 }
 
 .bottom-panel {
-  border-top: 1px solid var(--border);
-  background: var(--bg-panel);
+  border-top: 1px solid #2f2f2f;
+  background: #181818;
   display: grid;
   grid-template-rows: 36px 1fr;
 }
@@ -317,7 +299,7 @@ body {
   align-items: center;
   padding: 0 6px;
   gap: 4px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid #2f2f2f;
 }
 
 .panel-tab {
@@ -365,10 +347,4 @@ body {
   50% {
     opacity: 0;
   }
-}
-
-button:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid rgba(71, 145, 227, 0.8);
-  outline-offset: 1px;
 }
