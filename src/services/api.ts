@@ -95,7 +95,9 @@ export async function streamDynamicScan(
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || `Scan request failed (${response.status})`);
+    throw new Error(
+      message || `Scan request failed (${response.status}) at ${API_BASE_URL}/api/scan/stream`,
+    );
   }
 
   if (!response.body) {
@@ -120,8 +122,15 @@ export async function streamDynamicScan(
       buffer = buffer.slice(newlineIndex + 1);
 
       if (line) {
-        const parsed = JSON.parse(line) as DynamicScanStreamEvent;
-        options.onEvent(parsed);
+        try {
+          const parsed = JSON.parse(line) as DynamicScanStreamEvent;
+          options.onEvent(parsed);
+        } catch {
+          options.onEvent({
+            type: "error",
+            message: `Malformed stream event: ${line.slice(0, 220)}`,
+          });
+        }
       }
 
       newlineIndex = buffer.indexOf("\n");
@@ -130,7 +139,14 @@ export async function streamDynamicScan(
 
   const finalLine = buffer.trim();
   if (finalLine) {
-    const parsed = JSON.parse(finalLine) as DynamicScanStreamEvent;
-    options.onEvent(parsed);
+    try {
+      const parsed = JSON.parse(finalLine) as DynamicScanStreamEvent;
+      options.onEvent(parsed);
+    } catch {
+      options.onEvent({
+        type: "error",
+        message: `Malformed final stream event: ${finalLine.slice(0, 220)}`,
+      });
+    }
   }
 }
