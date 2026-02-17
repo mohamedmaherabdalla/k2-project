@@ -4,7 +4,7 @@ import re
 import asyncio
 import uuid
 from datetime import datetime, timezone
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Iterator
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -19,6 +19,11 @@ K2_MODEL = "MBZUAI-IFM/K2-Think-v2"
 
 class AnalyzeRequest(BaseModel):
     source_code: str = Field(..., min_length=1)
+
+
+class DynamicScanRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+    filename: str = Field(default="main.py", min_length=1)
 
 
 class RepoFile(BaseModel):
@@ -76,6 +81,14 @@ def analyze_source(request: AnalyzeRequest) -> dict[str, Any]:
         ],
         "model": K2_MODEL,
     }
+
+
+@app.post("/api/scan/stream")
+def scan_code_stream(request: DynamicScanRequest) -> StreamingResponse:
+    return StreamingResponse(
+        run_dynamic_scan_stream(request),
+        media_type="application/x-ndjson",
+    )
 
 
 @app.post("/api/audit/repo/stream")
@@ -256,6 +269,292 @@ async def run_pipeline(request: RepoAuditRequest) -> AsyncIterator[dict[str, Any
             "summary": {"critical_count": 0, "run_id": run_id},
             "findings": [],
         }
+
+
+DYNAMIC_SCAN_SYSTEM_PROMPT = """
+You are Invariant, a logic-security auditor.
+Simulate this exact 5-agent sequence:
+1) Cartographer
+2) Context Injector
+3) Adversary
+4) Roaster/Critic
+5) Auditor
+
+Return plain text in this exact structure:
+
+[DEBATE]
+AGENT 1: ...
+AGENT 2: ...
+AGENT 3: ...
+AGENT 4: ...
+AGENT 5: ...
+
+[FINAL]
+CRITICAL: <error name>
+EXPLANATION: <one sentence business risk>
+LOCATION: <path:line>
+ROAST SUMMARY: <why this survived critique>
+RECOMMENDATION: <fix plan>
+
+If multiple issues exist, repeat the 5 output lines per issue.
+If no critical issue exists, still output one block with:
+CRITICAL: No Critical Logic Flaw
+
+[EXPLOIT]
+Provide one runnable python exploit script wrapped in ```python fences.
+Do not omit the python code block.
+""".strip()
+
+
+def run_dynamic_scan_stream(request: DynamicScanRequest) -> Iterator[str]:
+    run_id = f"scan_{uuid.uuid4().hex[:10]}"
+    filename = request.filename.strip() or "main.py"
+    api_key = os.getenv("K2_API_KEY")
+
+    agent_steps = [
+        ("Agent 1 - Cartographer", "Mapping state transitions and cross-function dependencies."),
+        ("Agent 2 - Context Injector", "Inferring business invariants from code semantics."),
+        ("Agent 3 - Adversary", "Testing for logic bypasses and contradiction paths."),
+        ("Agent 4 - Roaster/Critic", "Rejecting weak claims and demanding exploitability proof."),
+        ("Agent 5 - Auditor", "Preparing strict critical report and exploit output."),
+    ]
+
+    yield to_ndjson(
+        {
+            "type": "run_start",
+            "run_id": run_id,
+            "filename": filename,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    for agent, message in agent_steps:
+        yield to_ndjson({"type": "agent_status", "agent": agent, "status": "running"})
+        yield to_ndjson(log_event(agent, message))
+
+    if not api_key:
+        fallback = build_dynamic_fallback_report(
+            request.code,
+            filename,
+            "K2_API_KEY is missing on backend; emitted local heuristic fallback.",
+        )
+        yield to_ndjson({"type": "error", "message": "K2_API_KEY is not configured."})
+        yield to_ndjson({"type": "token", "content": fallback})
+        for agent, _ in agent_steps:
+            yield to_ndjson({"type": "agent_status", "agent": agent, "status": "done"})
+        yield to_ndjson({"type": "done", "run_id": run_id, "analysis_text": fallback})
+        return
+
+    payload = {
+        "model": K2_MODEL,
+        "temperature": 0.15,
+        "stream": True,
+        "messages": [
+            {"role": "system", "content": DYNAMIC_SCAN_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"Target file: {filename}\n\n"
+                    "Analyze this exact editor code dynamically.\n"
+                    "Do not generalize or use template findings.\n\n"
+                    f"```python\n{request.code}\n```"
+                ),
+            },
+        ],
+    }
+
+    full_text = ""
+    try:
+        for token in stream_k2_tokens(payload, api_key):
+            full_text += token
+            yield to_ndjson({"type": "token", "content": token})
+
+        if not full_text.strip():
+            raise RuntimeError("K2 returned an empty streamed response.")
+
+        for agent, _ in agent_steps:
+            yield to_ndjson({"type": "agent_status", "agent": agent, "status": "done"})
+
+        yield to_ndjson(
+            log_event("Agent 5 - Auditor", "Completed final critical report compilation.")
+        )
+        yield to_ndjson({"type": "done", "run_id": run_id, "analysis_text": full_text})
+    except Exception as error:  # pragma: no cover - runtime safeguard
+        message = f"{type(error).__name__}: {error}"
+        fallback = build_dynamic_fallback_report(
+            request.code,
+            filename,
+            f"K2 streaming failed. Using fallback report. Cause: {message}",
+        )
+        yield to_ndjson({"type": "error", "message": message})
+        yield to_ndjson({"type": "token", "content": fallback})
+        for agent, _ in agent_steps:
+            yield to_ndjson({"type": "agent_status", "agent": agent, "status": "done"})
+        yield to_ndjson({"type": "done", "run_id": run_id, "analysis_text": fallback})
+
+
+def stream_k2_tokens(payload: dict[str, Any], api_key: str) -> Iterator[str]:
+    request = Request(
+        K2_API_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=180) as response:
+            raw_chunks: list[str] = []
+            saw_sse = False
+            for raw_line in response:
+                decoded = raw_line.decode("utf-8", errors="ignore")
+                raw_chunks.append(decoded)
+                line = decoded.strip()
+                if not line.startswith("data:"):
+                    continue
+                saw_sse = True
+                data = line[5:].strip()
+                if not data:
+                    continue
+                if data == "[DONE]":
+                    break
+                try:
+                    parsed = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                token = extract_completion_text(parsed)
+                if token:
+                    yield token
+
+            if saw_sse:
+                return
+
+            # Fallback for providers that ignore stream=true and return normal JSON.
+            raw = "".join(raw_chunks).strip()
+            if not raw:
+                return
+            parsed = json.loads(raw)
+            token = extract_completion_text(parsed)
+            if token:
+                yield token
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"K2 HTTP {error.code}: {detail}") from error
+    except URLError as error:
+        raise RuntimeError(f"K2 network error: {error.reason}") from error
+
+
+def extract_completion_text(payload: dict[str, Any]) -> str:
+    choices = payload.get("choices", [])
+    if not choices:
+        return ""
+    first_choice = choices[0]
+
+    delta = first_choice.get("delta")
+    if isinstance(delta, dict):
+        content = delta.get("content")
+        if isinstance(content, str):
+            return content
+
+    message = first_choice.get("message")
+    if isinstance(message, dict):
+        content = message.get("content")
+        if isinstance(content, str):
+            return content
+
+    text = first_choice.get("text")
+    if isinstance(text, str):
+        return text
+
+    return ""
+
+
+def build_dynamic_fallback_report(
+    code: str,
+    filename: str,
+    reason: str | None = None,
+) -> str:
+    lower = code.lower()
+    lines = code.splitlines()
+
+    error_name = "No Critical Logic Flaw"
+    explanation = "No critical exploit path was proven from this snippet under fallback analysis."
+    location = f"{filename}:1"
+    roast_summary = "Fallback mode requires concrete exploitability and found insufficient evidence for a critical claim."
+    recommendation = "Add tests for authorization and state transitions, then rerun with the live K2 backend."
+    exploit = "print('No dynamic exploit generated in fallback mode')"
+
+    race_line = first_line_match(lines, ["sleep(", "thread", "lock"])
+    idor_line = first_line_match(lines, ["user_id", "account_id", "owner_id"])
+    auth_line = first_line_match(lines, ["is_admin", "authorize", "permission", "auth"])
+
+    if race_line and "thread" in lower:
+        error_name = "Race Condition Flaw"
+        explanation = "Concurrent execution can violate state invariants and trigger inconsistent financial outcomes."
+        location = f"{filename}:{race_line}"
+        roast_summary = "Kept because shared mutable state is updated without a proven atomic guard."
+        recommendation = "Wrap the critical section with a lock or transactional primitive and add concurrent regression tests."
+        exploit = (
+            "import threading\n"
+            "from target import shared_state_action\n\n"
+            "def worker():\n"
+            "    print(shared_state_action())\n\n"
+            "threads = [threading.Thread(target=worker) for _ in range(2)]\n"
+            "for t in threads:\n"
+            "    t.start()\n"
+            "for t in threads:\n"
+            "    t.join()\n"
+        )
+    elif idor_line and auth_line:
+        error_name = "Object-Level Authorization Bypass"
+        explanation = "Identifier-driven access without strict ownership checks can expose protected records."
+        location = f"{filename}:{idor_line}"
+        roast_summary = "Retained because object identifiers appear user-controlled and authorization checks are incomplete."
+        recommendation = "Bind every object lookup to authenticated principal ownership and deny cross-tenant mismatches."
+        exploit = (
+            "import requests\n\n"
+            "for victim_id in range(1, 5):\n"
+            "    r = requests.get(f'http://localhost/resource/{victim_id}', headers={'Authorization': 'Bearer token'})\n"
+            "    print(victim_id, r.status_code, r.text[:80])\n"
+        )
+
+    report_lines = [
+        "[DEBATE]",
+        "AGENT 1: Control flow and mutable state were mapped from the submitted code.",
+        "AGENT 2: Business invariants were inferred from value movement and authorization cues.",
+        "AGENT 3: Potential bypass paths were stress-tested for attacker-controlled inputs.",
+        "AGENT 4: Weak candidates were rejected unless exploitability proof remained concrete.",
+        "AGENT 5: Final critical report assembled in strict output format.",
+        "",
+        "[FINAL]",
+        f"CRITICAL: {error_name}",
+        f"EXPLANATION: {explanation}",
+        f"LOCATION: {location}",
+        f"ROAST SUMMARY: {roast_summary}",
+        f"RECOMMENDATION: {recommendation}",
+        "",
+        "[EXPLOIT]",
+        "```python",
+        exploit,
+        "```",
+    ]
+
+    if reason:
+        report_lines.extend(["", f"NOTE: {reason}"])
+
+    return "\n".join(report_lines)
+
+
+def first_line_match(lines: list[str], needles: list[str]) -> int | None:
+    lowered_needles = [needle.lower() for needle in needles]
+    for index, line in enumerate(lines, start=1):
+        lower = line.lower()
+        if any(needle in lower for needle in lowered_needles):
+            return index
+    return None
 
 
 async def invoke_agent(

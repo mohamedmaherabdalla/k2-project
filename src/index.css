@@ -143,6 +143,38 @@ body {
   border-color: rgba(255, 255, 255, 0.25);
 }
 
+.lab-runtime-pill {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.lab-runtime-pill-idle {
+  color: #97a2b1;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.lab-runtime-pill-loading {
+  color: #d6dcff;
+  border-color: rgba(107, 122, 255, 0.6);
+  background: rgba(83, 96, 206, 0.2);
+}
+
+.lab-runtime-pill-ready {
+  color: #8ef2b1;
+  border-color: rgba(86, 195, 127, 0.6);
+  background: rgba(52, 160, 98, 0.2);
+}
+
+.lab-runtime-pill-error {
+  color: #ff9a9a;
+  border-color: rgba(216, 79, 79, 0.6);
+  background: rgba(166, 49, 49, 0.22);
+}
+
 .lab-api-pill {
   font-size: 10px;
   letter-spacing: 0.06em;
@@ -167,6 +199,30 @@ body {
   color: #ff9a9a;
   border-color: rgba(216, 79, 79, 0.6);
   background: rgba(166, 49, 49, 0.22);
+}
+
+.lab-run-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-radius: 9px;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.lab-run-btn:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.lab-run-btn:disabled {
+  opacity: 0.9;
+  cursor: progress;
 }
 
 .lab-scan-btn {
