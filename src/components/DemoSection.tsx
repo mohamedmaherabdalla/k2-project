@@ -4,6 +4,7 @@ import Editor from '@monaco-editor/react';
 import { Zap, Search, Shield, BarChart3 } from 'lucide-react';
 import { ReasoningTrace } from './ReasoningTrace';
 import { ViolationCard } from './ViolationCard';
+import { analyzeInvariantSource, type AnalyzeResponse } from '../services/api';
 
 const PYTHON_PAYMENT_CODE = `def process_payment(user_id, amount):
     """Process payment with authorization check."""
@@ -43,6 +44,9 @@ export function DemoSection() {
   const [code, setCode] = useState(PYTHON_PAYMENT_CODE);
   const [activeView, setActiveView] = useState<string>('analysis');
   const [showViolation, setShowViolation] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
 
   const views: AnalysisView[] = [
     { id: 'analysis', label: 'Analysis', icon: Search },
@@ -50,26 +54,58 @@ export function DemoSection() {
     { id: 'coverage', label: 'Coverage', icon: BarChart3 },
   ];
 
-  const traceSteps: TraceStep[] = [
-    {
-      title: 'Mapping Control Flow',
-      status: 'success',
-      description: 'Parsed 2 functions, 5 branches',
-    },
-    {
-      title: 'Inferring State',
-      status: 'success',
-      description: 'Tracked balance, authorization state',
-    },
-    {
-      title: 'Detecting Bypass',
-      status: 'in-progress',
-      description: 'Analyzing security boundaries...',
-    },
-  ];
+  const traceSteps: TraceStep[] = isRunning
+    ? [
+      {
+        title: 'Mapping Control Flow',
+        status: 'success',
+        description: 'Parsed function scopes and branch conditions',
+      },
+      {
+        title: 'Inferring State',
+        status: 'in-progress',
+        description: 'Tracking state transitions and edge cases...',
+      },
+      {
+        title: 'Detecting Bypass',
+        status: 'pending',
+        description: 'Waiting for model output',
+      },
+    ]
+    : [
+      {
+        title: 'Mapping Control Flow',
+        status: 'success',
+        description: 'Parsed 2 functions, 5 branches',
+      },
+      {
+        title: 'Inferring State',
+        status: 'success',
+        description: analysis ? `Model: ${analysis.model}` : 'Tracked balance, authorization state',
+      },
+      {
+        title: 'Detecting Bypass',
+        status: analysis ? 'success' : 'in-progress',
+        description: analysis
+          ? `${analysis.issues_found} issues found`
+          : 'Analyzing security boundaries...',
+      },
+    ];
 
-  const handleRunAnalysis = () => {
-    setShowViolation(true);
+  const handleRunAnalysis = async () => {
+    setRequestError(null);
+    setIsRunning(true);
+    try {
+      const result = await analyzeInvariantSource(code);
+      setAnalysis(result);
+      setShowViolation(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown backend error';
+      setRequestError(message);
+      setShowViolation(true);
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   return (
@@ -149,16 +185,21 @@ export function DemoSection() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             className="px-8 py-4 bg-[#F97316] text-white rounded-2xl text-base font-semibold hover:bg-[#ea580c] transition flex items-center gap-2 shadow-lg"
+            disabled={isRunning}
           >
             <Zap className="w-5 h-5" />
-            Run Invariant
+            {isRunning ? 'Running...' : 'Run Invariant'}
           </motion.button>
         </div>
       </div>
 
       {showViolation && (
         <div className="relative mt-8 h-64">
-          <ViolationCard isVisible={showViolation} />
+          <ViolationCard
+            isVisible={showViolation}
+            issue={analysis?.critical_logic_failures?.[0] ?? null}
+            summary={requestError ?? analysis?.summary}
+          />
         </div>
       )}
     </section>

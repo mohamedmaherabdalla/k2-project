@@ -1,11 +1,21 @@
 import { motion } from 'framer-motion';
 import { AlertTriangle, Wand2 } from 'lucide-react';
+import type { CriticalLogicFailure } from '../services/api';
 
 interface ViolationCardProps {
   isVisible: boolean;
+  issue?: CriticalLogicFailure | null;
+  summary?: string;
 }
 
-export function ViolationCard({ isVisible }: ViolationCardProps) {
+export function ViolationCard({ isVisible, issue, summary }: ViolationCardProps) {
+  const severity = issue?.severity ?? 'HIGH';
+  const severityStyle = severity === 'HIGH'
+    ? 'bg-red-100 text-red-700'
+    : severity === 'MED'
+      ? 'bg-yellow-100 text-yellow-700'
+      : 'bg-green-100 text-green-700';
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -24,32 +34,31 @@ export function ViolationCard({ isVisible }: ViolationCardProps) {
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h4 className="font-bold text-[#111827]">Logic Violation</h4>
-                <span className="px-2 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-bold">
-                  CRITICAL
+                <h4 className="font-bold text-[#111827]">{issue?.title ?? 'Logic Violation'}</h4>
+                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${severityStyle}`}>
+                  {severity}
                 </span>
               </div>
               <p className="text-xs text-gray-600 mt-1">
-                Authorization bypass detected in transfer() function
+                {summary ?? issue?.description ?? 'Security issue detected in current code.'}
               </p>
             </div>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-3 mb-4 border border-gray-200">
             <div className="font-mono text-xs text-gray-700 leading-relaxed">
-              <span className="text-purple-600">if</span> amount <span className="text-purple-600">{">"}</span> <span className="text-green-600">0</span>:
-              <div className="ml-4">transfer(amount)</div>
+              {issue?.evidence ?? 'Run analysis to view exploit evidence'}
             </div>
           </div>
 
           <div className="space-y-2 mb-4 text-xs">
             <div className="flex items-center gap-2 text-gray-700">
               <span className="w-1 h-1 rounded-full bg-red-500" />
-              Missing authentication check
+              {issue?.description ?? 'Potential logic bypass detected'}
             </div>
             <div className="flex items-center gap-2 text-gray-700">
               <span className="w-1 h-1 rounded-full bg-red-500" />
-              No amount validation for negative values
+              {issue ? `Reported at line ${issue.line}` : 'No line information available'}
             </div>
           </div>
 

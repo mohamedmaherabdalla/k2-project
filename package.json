@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:up": "bash scripts/dev-up.sh",
+    "dev:down": "bash scripts/dev-down.sh",
+    "dev:status": "bash scripts/dev-status.sh",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",

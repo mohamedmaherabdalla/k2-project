@@ -1,0 +1,9 @@
+{
+  "name": "buggy-fintech-playground",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Intentionally vulnerable repository for Invariant audit testing.",
+  "scripts": {
+    "start": "node src/index.js"
+  }
+}

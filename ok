@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+"$ROOT/.venv/bin/python" -c "import fastapi,uvicorn; print('python ok')"
+"$ROOT/.venv/bin/python" -m py_compile "$ROOT/backend/main.py"
+echo "backend ok"
+
+"$ROOT/web" >/dev/null
+echo "web ok"
+
+"$ROOT/ext" >/dev/null
+echo "extension ok"
+
+echo "all ok"

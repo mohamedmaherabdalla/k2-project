@@ -1,0 +1,78 @@
+{
+  "name": "invariant-vscode",
+  "displayName": "Invariant",
+  "description": "Repository-wide logic auditor using a 5-agent K2 Think V2 pipeline.",
+  "version": "0.0.1",
+  "publisher": "invariant",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:invariant.sidebarView",
+    "onCommand:invariant.runAudit",
+    "onCommand:invariant.highlightLocation",
+    "onCommand:invariant.applyCodeFix"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "Invariant",
+      "properties": {
+        "invariant.backendUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "Backend URL for the Invariant FastAPI service."
+        },
+        "invariant.maxFiles": {
+          "type": "number",
+          "default": 6000,
+          "minimum": 100,
+          "description": "Maximum number of workspace files to include in a full repository audit."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "invariant",
+          "title": "Invariant",
+          "icon": "media/invariant.svg"
+        }
+      ]
+    },
+    "views": {
+      "invariant": [
+        {
+          "id": "invariant.sidebarView",
+          "name": "Audit Pipeline"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "invariant.runAudit",
+        "title": "Invariant: Run Full Repository Audit"
+      },
+      {
+        "command": "invariant.highlightLocation",
+        "title": "Invariant: Highlight Finding Location"
+      },
+      {
+        "command": "invariant.applyCodeFix",
+        "title": "Invariant: Apply Code Fix"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.3"
+  }
+}

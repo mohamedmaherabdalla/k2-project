@@ -1,3 +1,374 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+:root {
+  color-scheme: dark;
+  --bg-main: #1e1e1e;
+  --bg-editor: #1e1e1e;
+  --bg-sidebar: #252526;
+  --bg-tab: #2d2d2d;
+  --bg-panel: #181818;
+  --border: #2f2f2f;
+  --text-main: #d4d4d4;
+  --text-dim: #9da2aa;
+  --accent: #0e639c;
+  --danger: #8f2f35;
+  --danger-border: #b44c54;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-family: "SF Pro Text", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.vscode-shell {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: 44px 1fr 220px;
+  background: var(--bg-main);
+}
+
+.workbench-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: #2b2b2b;
+}
+
+.window-title {
+  font-size: 12px;
+  color: #c8c8c8;
+  letter-spacing: 0.02em;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.api-pill {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.api-pill-idle {
+  color: #b0b8c0;
+  border-color: #3a3f44;
+}
+
+.api-pill-ok {
+  color: #82d9a0;
+  border-color: #22663b;
+  background: rgba(20, 105, 45, 0.15);
+}
+
+.api-pill-down {
+  color: #ef9a9a;
+  border-color: #7a2727;
+  background: rgba(114, 30, 30, 0.16);
+}
+
+.scan-button {
+  border: 1px solid #2574a9;
+  background: linear-gradient(180deg, #1177bb 0%, var(--accent) 100%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scan-button:disabled {
+  opacity: 0.8;
+  cursor: progress;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.workbench-main {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 260px 1fr;
+}
+
+.explorer {
+  border-right: 1px solid var(--border);
+  background: var(--bg-sidebar);
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.explorer-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #c9c9c9;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+
+.file-group {
+  font-size: 11px;
+  color: #8d9399;
+  text-transform: uppercase;
+  margin: 4px 6px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-main);
+  text-align: left;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.file-row:hover {
+  background: #2f2f2f;
+}
+
+.file-row.active {
+  background: #37373d;
+  border-color: #45454f;
+}
+
+.file-row.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.file-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.file-icon.py {
+  background: #4ea2f0;
+}
+
+.file-icon.txt {
+  background: #7d7d7d;
+}
+
+.editor-section {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 34px 1fr;
+}
+
+.editor-tabbar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: #252526;
+}
+
+.editor-tab {
+  font-size: 12px;
+  color: #c9c9c9;
+  padding: 9px 14px;
+}
+
+.editor-tab.active {
+  background: var(--bg-editor);
+  border-right: 1px solid var(--border);
+}
+
+.editor-surface {
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  background: var(--bg-editor);
+}
+
+.code-layer,
+.input-layer {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  tab-size: 4;
+  overflow: auto;
+  white-space: pre;
+}
+
+.code-layer {
+  pointer-events: none;
+  padding: 14px 0;
+}
+
+.input-layer {
+  width: 100%;
+  height: 100%;
+  padding: 14px 16px 14px 68px;
+  border: 0;
+  background: transparent;
+  resize: none;
+  outline: none;
+  color: transparent;
+  caret-color: #e4e4e4;
+}
+
+.input-layer::selection {
+  background: rgba(80, 140, 255, 0.45);
+}
+
+.code-line {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+}
+
+.line-no {
+  width: 56px;
+  text-align: right;
+  padding-right: 12px;
+  color: #5e5e5e;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.line-content {
+  color: var(--text-main);
+  flex: 1;
+  min-width: 0;
+  padding-right: 16px;
+}
+
+.code-line-alert {
+  background: linear-gradient(90deg, rgba(164, 45, 45, 0.36) 0%, rgba(133, 39, 39, 0.1) 75%);
+  border-left: 3px solid var(--danger-border);
+}
+
+.tok-keyword {
+  color: #c586c0;
+}
+
+.tok-string {
+  color: #ce9178;
+}
+
+.tok-number {
+  color: #b5cea8;
+}
+
+.tok-comment {
+  color: #6a9955;
+}
+
+.tok-function {
+  color: #dcdcaa;
+}
+
+.bottom-panel {
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  display: grid;
+  grid-template-rows: 36px 1fr;
+}
+
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #a5abb3;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.panel-tab.active {
+  color: #d8d8d8;
+  background: #252526;
+  border-color: #3b3b3f;
+}
+
+.panel-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.terminal-output,
+.invariant-output {
+  margin: 0;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #cfcfcf;
+  white-space: pre-wrap;
+}
+
+.invariant-output {
+  color: #f2b5b5;
+}
+
+.cursor {
+  color: #ff7676;
+  animation: blink 0.8s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+button:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(71, 145, 227, 0.8);
+  outline-offset: 1px;
+}
